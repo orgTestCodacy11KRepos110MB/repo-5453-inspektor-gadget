@@ -137,6 +137,10 @@ gadget-%-container:
 push-gadget-%-container:
 	docker push $(CONTAINER_REPO):$(IMAGE_TAG)$(if $(findstring core,$*),-core,)
 
+gadget-%-container-debug:
+	docker buildx build -t $(CONTAINER_REPO):$(IMAGE_TAG)$(if $(findstring core,$*),-core,) -f Dockerfiles/gadget-$*-debug.Dockerfile \
+		--build-arg ENABLE_BTFGEN=$(ENABLE_BTFGEN) .
+
 # kubectl-gadget container image
 .PHONY: kubectl-gadget-container
 kubectl-gadget-container:
@@ -201,7 +205,12 @@ lint:
 # minikube
 LIVENESS_PROBE ?= true
 .PHONY: minikube-deploy
-minikube-deploy: minikube-start gadget-default-container kubectl-gadget
+minikube-deploy: minikube-start gadget-default-container minikube-deploy-inner
+
+.PHONY: minikube-deploy-debug
+minikube-deploy-debug: minikube-start gadget-default-container-debug minikube-deploy-inner
+
+minikube-deploy-inner: kubectl-gadget
 	@echo "Image on the host:"
 	docker image list --format "table {{.ID}}\t{{.Repository}}:{{.Tag}}\t{{.Size}}" |grep $(CONTAINER_REPO):$(IMAGE_TAG)
 	@echo

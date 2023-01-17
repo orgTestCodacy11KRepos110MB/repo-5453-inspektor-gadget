@@ -788,6 +788,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # To use keyless signing, we need to give write permissions to the
+      # id-token, so we can get an OIDC JWT ID token:
+      # https://docs.github.com/en/enterprise-server@3.6/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect#adding-permissions-settings
+      id-token: write
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
     - uses: actions/checkout@v3
@@ -827,6 +831,15 @@ jobs:
           hash=$(sha256sum $i | cut -d' ' -f1)
           echo "${hash}  $(basename $i)" >> inspektor-gadget-${{ github.ref_name }}_checksums.txt
         done
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@main
+    - name: Sign all blobs
+      shell: bash
+      run: |
+        for i in *-gadget-*-*-tar-gz/*-gadget-*-*.tar.gz inspektor-gadget-${{ github.ref_name }}.yaml inspektor-gadget-${{ github.ref_name }}_checksums.txt; do
+          base_name=$(basename $i)
+          COSIGN_EXPERIMENTAL=1 cosign sign-blob $i --output-signature="${base_name}.sig" --output-certificate="${base_name}.cert"
+        done
     - name: Upload Gadget Release *.tar.gz
       uses: csexton/release-asset-action@v2
       with:
@@ -843,6 +856,18 @@ jobs:
       uses: csexton/release-asset-action@v2
       with:
         file: inspektor-gadget-${{ github.ref_name }}_checksums.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        release-url: ${{ steps.create_release.outputs.upload_url }}
+    - name: Upload signatures
+      uses: csexton/release-asset-action@v2
+      with:
+        pattern: "*.sig"
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        release-url: ${{ steps.create_release.outputs.upload_url }}
+    - name: Upload certificates
+      uses: csexton/release-asset-action@v2
+      with:
+        pattern: "*.cert"
         github-token: ${{ secrets.GITHUB_TOKEN }}
         release-url: ${{ steps.create_release.outputs.upload_url }}
     - name: Update new version in krew-index

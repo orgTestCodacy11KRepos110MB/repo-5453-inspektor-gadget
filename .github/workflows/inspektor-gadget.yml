@@ -777,8 +777,6 @@ jobs:
       - ebpf-objects-checks
       - lint
       - test-integration-minikube
-      - test-integration-aks
-      - test-integration-aro
       - test-local-gadget
       - test-integration-k8s-local-gadget
       - test-integration-non-k8s-local-gadget

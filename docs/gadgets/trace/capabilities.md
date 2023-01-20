@@ -177,6 +177,11 @@ You can now delete the pod you created:
 $ kubectl delete -f docs/examples/app-set-priority-locked-down.yaml
 ```
 
+The following animation shows a real world example of debugging an `nginx` deployment:
+
+![Screencast of using trace capabilities to debug an nginx deployment](nginx_capabilities.gif)
+
+
 ### With local-gadget
 
 TODO

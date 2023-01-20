@@ -5,6 +5,8 @@ description: >
   Gather information about TCP and UDP sockets.
 ---
 
+![Screencast of snapshot process compared to calling kubectl exec ps](capabilities.gif)
+
 The snapshot socket gadget gathers information about TCP and UDP sockets.
 
 ### On Kubernetes

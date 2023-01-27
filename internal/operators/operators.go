@@ -245,6 +245,17 @@ func SortOperators(operators Operators) (Operators, error) {
 		}
 	}
 
+	// Check if all dependencies are in operators
+outerLoop:
+	for opName, _ := range incomingEdges {
+		for _, e := range operators {
+			if opName == e.Name() {
+				continue outerLoop
+			}
+		}
+		return nil, fmt.Errorf("dependency %q is not available in operators", opName)
+	}
+
 	// Initialize the queue with all the elements that have zero incoming edges
 	var queue []string
 	for _, e := range operators {

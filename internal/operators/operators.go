@@ -247,7 +247,7 @@ func SortOperators(operators Operators) (Operators, error) {
 
 	// Check if all dependencies are in operators
 outerLoop:
-	for opName, _ := range incomingEdges {
+	for opName := range incomingEdges {
 		for _, e := range operators {
 			if opName == e.Name() {
 				continue outerLoop

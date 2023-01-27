@@ -157,6 +157,17 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 			}
 			defer runtime.DeInit()
 
+			// Initialize all valid operators for this gadget here.
+			// TODO(mauricio): Can't we initialize all registered operators instead?
+			validOperators.Init(operatorsParamsCollection)
+
+			// TODO(mauricio): Create helper for closing all operators?
+			defer func() {
+				for _, op := range validOperators {
+					op.Close()
+				}
+			}()
+
 			fe := console.NewFrontend()
 			defer fe.Close()
 
@@ -178,6 +189,7 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 				runtime,
 				gadget,
 				parser,
+				validOperators,
 				log,
 			)
 

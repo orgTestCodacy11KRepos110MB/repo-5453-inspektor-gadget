@@ -51,15 +51,17 @@ func NewGadgetRunner(
 	runtime runtime.Runtime,
 	gadget gadgets.Gadget,
 	parser parser.Parser,
+	operators operators.Operators,
 	logger logger.Logger,
 ) *GadgetRunner {
 	return &GadgetRunner{
-		ctx:     ctx,
-		id:      id,
-		gadget:  gadget,
-		runtime: runtime,
-		parser:  parser,
-		logger:  logger,
+		ctx:       ctx,
+		id:        id,
+		gadget:    gadget,
+		runtime:   runtime,
+		parser:    parser,
+		operators: operators,
+		logger:    logger,
 	}
 }
 
@@ -112,12 +114,7 @@ func (r *GadgetRunner) RunGadget(
 	gadgetParams *params.Params,
 ) error {
 	r.gadgetParams = gadgetParams
-	r.operators = operators.GetOperatorsForGadget(r.gadget)
-	err := r.operators.Init(operatorParamCollection)
-	if err != nil {
-		return fmt.Errorf("initializing operators: %w", err)
-	}
-	err = r.runtime.RunGadget(r, runtimeParams, operatorPerGadgetParamCollection)
+	err := r.runtime.RunGadget(r, runtimeParams, operatorPerGadgetParamCollection)
 	if err != nil {
 		return fmt.Errorf("running gadget: %w", err)
 	}

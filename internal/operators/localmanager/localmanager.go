@@ -168,67 +168,48 @@ partsLoop:
 }
 
 func (l *LocalManager) Close() error {
+	fmt.Printf("closing\n")
+
 	l.localGadgetManager.Close()
 	return nil
 }
 
-type LocalManagerTrace struct {
-	*LocalManager
-	mountnsmap      *ebpf.Map
-	enrichEvents    bool
-	subscriptionKey string
+func (l *LocalManager) OperateOn(runner operators.Runner, tracer any, perGadgetParams *params.Params) (func(), error) {
+	log := runner.Logger()
 
-	// Keep a map to attached containers, so we can clean up properly
-	attachedContainers map[*containercollection.Container]struct{}
-	attacher           Attacher
-	perGadgetParams    *params.Params
-	tracer             any
-	runner             operators.Runner
-}
-
-func (l *LocalManager) Instantiate(runner operators.Runner, tracer any, perGadgetParams *params.Params) (operators.OperatorInstance, error) {
-	_, canEnrichEvent := runner.Gadget().EventPrototype().(operators.KubernetesFromMountNSID)
-
-	traceInstance := &LocalManagerTrace{
-		LocalManager:       l,
-		enrichEvents:       canEnrichEvent,
-		attachedContainers: make(map[*containercollection.Container]struct{}),
-		perGadgetParams:    perGadgetParams,
-		tracer:             tracer,
-		runner:             runner,
-	}
-
-	return traceInstance, nil
-}
-
-func (l *LocalManagerTrace) PreGadgetRun() error {
-	log := l.runner.Logger()
+	log.Debug("LocalManager: OperateOn")
 
 	// TODO: Improve filtering, see further details in
 	// https://github.com/inspektor-gadget/inspektor-gadget/issues/644.
 	containerSelector := containercollection.ContainerSelector{
-		Name: l.perGadgetParams.Get(ContainerName).AsString(),
+		Name: perGadgetParams.Get(ContainerName).AsString(),
 	}
 
-	if setter, ok := l.tracer.(MountNsMapSetter); ok {
+	var mountnsmap *ebpf.Map
+	var subscriptionKey string
+	var attachedContainers map[*containercollection.Container]struct{}
+	var err error
+
+	if setter, ok := tracer.(MountNsMapSetter); ok {
 		// Create mount namespace map to filter by containers
-		mountnsmap, err := l.localGadgetManager.CreateMountNsMap(containerSelector)
+		mountnsmap, err = l.localGadgetManager.CreateMountNsMap(containerSelector)
 		if err != nil {
-			return commonutils.WrapInErrManagerCreateMountNsMap(err)
+			return nil, commonutils.WrapInErrManagerCreateMountNsMap(err)
 		}
 
 		log.Debugf("set mountnsmap for gadget")
 		setter.SetMountNsMap(mountnsmap)
-
-		l.mountnsmap = mountnsmap
 	}
 
-	if setter, ok := l.tracer.(ContainersMapSetter); ok {
+	if setter, ok := tracer.(ContainersMapSetter); ok {
 		setter.SetContainersMap(l.localGadgetManager.ContainersMap())
 	}
 
-	if attacher, ok := l.tracer.(Attacher); ok {
-		l.attacher = attacher
+	var attacher Attacher
+	var ok bool
+
+	if attacher, ok = tracer.(Attacher); ok {
+		attachedContainers = make(map[*containercollection.Container]struct{})
 
 		attachContainerFunc := func(container *containercollection.Container) {
 			var cbFunc any
@@ -240,7 +221,7 @@ func (l *LocalManagerTrace) PreGadgetRun() error {
 				return
 			}
 
-			l.attachedContainers[container] = struct{}{}
+			attachedContainers[container] = struct{}{}
 
 			log.Debugf("tracer attached") // TODO: container info?
 		}
@@ -252,15 +233,18 @@ func (l *LocalManagerTrace) PreGadgetRun() error {
 				log.Warnf("stop tracing container %q: %s", container.Name, err)
 				return
 			}
+
+			delete(attachedContainers, container)
+
 			log.Debugf("tracer detached") // TODO: container info?
 		}
 
 		id := uuid.New()
-		l.subscriptionKey = id.String()
+		subscriptionKey = id.String()
 
 		log.Debugf("add subscription")
 		containers := l.localGadgetManager.Subscribe(
-			l.subscriptionKey,
+			subscriptionKey,
 			containerSelector,
 			func(event containercollection.PubSubEvent) {
 				switch event.Type {
@@ -277,32 +261,30 @@ func (l *LocalManagerTrace) PreGadgetRun() error {
 		}
 	}
 
-	return nil
-}
+	cleanup := func() {
+		if mountnsmap != nil {
+			l.localGadgetManager.RemoveMountNsMap()
+		}
 
-func (l *LocalManagerTrace) PostGadgetRun() error {
-	l.LocalManager.PostGadgetRun()
+		if subscriptionKey != "" {
+			log.Debugf("calling Unsubscribe()")
+			l.localGadgetManager.Unsubscribe(subscriptionKey)
 
-	if l.mountnsmap != nil {
-		log.Debugf("calling RemoveMountNsMap()")
-		l.localGadgetManager.RemoveMountNsMap()
-	}
-	if l.subscriptionKey != "" {
-		log.Debugf("calling Unsubscribe()")
-		l.localGadgetManager.Unsubscribe(l.subscriptionKey)
-
-		// emit detach for all remaining containers
-		for container := range l.attachedContainers {
-			l.attacher.DetachGeneric(container)
+			// emit detach for all remaining containers
+			for container := range attachedContainers {
+				attacher.DetachGeneric(container)
+			}
 		}
 	}
-	return nil
+
+	return cleanup, nil
 }
 
-func (l *LocalManagerTrace) EnrichEvent(ev any) error {
-	if !l.enrichEvents {
-		return nil
-	}
+func (l *LocalManager) EnrichEvent(ev any) error {
+	// TODO(Mauricio): How to hav this per-gadget flags?
+	//if !l.enrichEvents {
+	//	return nil
+	//}
 
 	event, ok := ev.(operators.KubernetesFromMountNSID)
 	if !ok {
@@ -314,36 +296,6 @@ func (l *LocalManagerTrace) EnrichEvent(ev any) error {
 	if container != nil {
 		event.SetContainerInfo(container.Podname, container.Namespace, container.Name)
 	}
-	return nil
-}
-
-func (l *LocalManagerTrace) Enricher(next operators.EnricherFunc) operators.EnricherFunc {
-	if !l.enrichEvents {
-		return nil
-	}
-	return func(ev any) error {
-		event, ok := ev.(operators.KubernetesFromMountNSID)
-		if !ok {
-			return errors.New("invalid event to enrich")
-		}
-
-		container := l.localGadgetManager.ContainerCollection.LookupContainerByMntns(event.GetMountNSID())
-		if container != nil {
-			event.SetContainerInfo(container.Podname, container.Namespace, container.Name)
-		}
-		return next(ev)
-	}
-}
-
-func (l *LocalManager) PreGadgetRun() error {
-	return nil
-}
-
-func (l *LocalManager) PostGadgetRun() error {
-	return nil
-}
-
-func (l *LocalManager) EnrichEvent(a any) error {
 	return nil
 }
 

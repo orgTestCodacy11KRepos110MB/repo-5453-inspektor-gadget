@@ -67,35 +67,17 @@ type Operator interface {
 	// Close allows the operator to clean up stuff prior to exiting
 	Close() error
 
-	// Instantiate is called before a gadget is run (before PreGadgetRun) with this operator
-	// This must return something that implements operator as well.
-	// This is useful to create a context for an operator by wrapping it.
-	// Params given here are the ones returned by PerGadgetParams()
-	Instantiate(runner Runner, gadgetInstance any, perGadgetParams *params.Params) (OperatorInstance, error)
-}
-
-type OperatorInstance interface {
-	// PreGadgetRun is called before a gadget is started but after all allOperators have been initialized
-	PreGadgetRun() error
-
-	// PostGadgetRun is called on the operator that was returned from PrepareTrace after a
-	// gadget was stopped
-	PostGadgetRun() error
-
-	// Enricher should return a function that is able to operator on the event ev and
-	// call next afterwards.
-	Enricher(next EnricherFunc) EnricherFunc
+	// OperateOn runs the operator's logic on the gadget instance. It results a cleanup function
+	// that has to be called when the gadget finishes the execution.
+	OperateOn(runner Runner, gadgetInstance any, perGadgetParams *params.Params) (func(), error)
 
 	// Deprecated: EnrichEvent
 	EnrichEvent(ev any) error
+
+	Enricher(fn EnricherFunc) EnricherFunc
 }
 
-type operatorInterfaces struct {
-	Operator
-	OperatorInstance
-}
-
-type Operators []operatorInterfaces
+type Operators []Operator
 
 // KubernetesFromMountNSID is a typical kubernetes operator interface that adds node, pod, namespace and container
 // information given the MountNSID
@@ -148,9 +130,7 @@ func GetOperatorsForGadget(gadget gadgets.Gadget) Operators {
 	out := make(Operators, 0)
 	for _, operator := range allOperators {
 		if operator.CanOperateOn(gadget) {
-			out = append(out, operatorInterfaces{
-				Operator: operator,
-			})
+			out = append(out, operator)
 		}
 	}
 	out, err := SortOperators(out)
@@ -180,31 +160,24 @@ func (e Operators) PerGadgetParamCollection() params.Collection {
 	return pc
 }
 
-// PreGadgetRun calls PreGadgetRun on all members of the operator collection and replaces them with the returned
-// instance
-func (e Operators) PreGadgetRun(runner Runner, trace any, perGadgetParamCollection params.Collection) error {
-	for i, operator := range e {
-		operatorInstance, err := operator.Instantiate(runner, trace, perGadgetParamCollection[operator.Name()])
-		if err != nil {
-			return fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
-		}
-		e[i].OperatorInstance = operatorInstance
-	}
-	for _, operator := range e {
-		err := operator.PreGadgetRun()
-		if err != nil {
-			return fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
-		}
-	}
-	return nil
-}
+func (e Operators) OperateOn(runner Runner, trace any, perGadgetParamCollection params.Collection) (func(), error) {
+	cleanupFuncs := []func(){}
 
-func (e Operators) PostGadgetRun() error {
-	// TODO: Handling errors?
-	for _, operator := range e {
-		operator.PostGadgetRun()
+	cleanUp := func() {
+		for _, f := range cleanupFuncs {
+			f()
+		}
 	}
-	return nil
+	for _, operator := range e {
+		f, err := operator.OperateOn(runner, trace, perGadgetParamCollection[operator.Name()])
+		if err != nil {
+			return cleanUp, fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
+		}
+
+		cleanupFuncs = append(cleanupFuncs, f)
+	}
+
+	return cleanUp, nil
 }
 
 // Deprecated: Enrich an event using all members of the operator collection

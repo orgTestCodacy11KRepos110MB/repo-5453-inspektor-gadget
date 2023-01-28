@@ -170,19 +170,17 @@ type LocalManagerTrace struct {
 	// Keep a map to attached containers, so we can clean up properly
 	attachedContainers map[*containercollection.Container]struct{}
 	attacher           Attacher
-	perGadgetParams    *params.Params
 	tracer             any
 	runner             operators.Runner
 }
 
-func (l *LocalManager) Instantiate(runner operators.Runner, tracer any, perGadgetParams *params.Params) (operators.OperatorInstance, error) {
+func (l *LocalManager) Instantiate(runner operators.Runner, tracer any) (operators.OperatorInstance, error) {
 	_, canEnrichEvent := runner.Gadget().EventPrototype().(operators.KubernetesFromMountNSID)
 
 	traceInstance := &LocalManagerTrace{
 		LocalManager:       l,
 		enrichEvents:       canEnrichEvent,
 		attachedContainers: make(map[*containercollection.Container]struct{}),
-		perGadgetParams:    perGadgetParams,
 		tracer:             tracer,
 		runner:             runner,
 	}
@@ -196,7 +194,7 @@ func (l *LocalManagerTrace) PreGadgetRun() error {
 	// TODO: Improve filtering, see further details in
 	// https://github.com/inspektor-gadget/inspektor-gadget/issues/644.
 	containerSelector := containercollection.ContainerSelector{
-		Name: l.perGadgetParams.Get(ContainerName).AsString(),
+		Name: l.gadgetParams.Get(ContainerName).AsString(),
 	}
 
 	if setter, ok := l.tracer.(MountNsMapSetter); ok {

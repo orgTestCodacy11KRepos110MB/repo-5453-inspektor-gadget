@@ -134,10 +134,6 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 	// Instantiate gadget params - this is important, because the params get filled out by cobra
 	gadgetParams := gadget.Params().ToParams()
 
-	// Get per gadget operator params
-	validOperators := operators.GetOperatorsForGadget(gadget)
-	operatorsPerGadgetParamCollection := validOperators.PerGadgetParamCollection()
-
 	cmd := &cobra.Command{
 		Use:   gadget.Name(),
 		Short: gadget.Description(),
@@ -252,7 +248,7 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 			}
 
 			// Finally, hand over to runtime
-			return runner.RunGadget(runtimeParams, operatorsPerGadgetParamCollection, gadgetParams)
+			return runner.RunGadget(runtimeParams, gadgetParams)
 		},
 	}
 
@@ -325,9 +321,11 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 	addFlags(cmd, gadgetParams)
 
 	// Add per-gadget operator flags
-	for _, operatorParams := range operatorsPerGadgetParamCollection {
+	validOperators := operators.GetOperatorsForGadget(gadget)
+	for _, operatorParams := range validOperators.PerGadgetParamCollection() {
 		addFlags(cmd, operatorParams)
 	}
+
 	return cmd
 }
 

@@ -70,8 +70,7 @@ type Operator interface {
 	// Instantiate is called before a gadget is run (before PreGadgetRun) with this operator
 	// This must return something that implements operator as well.
 	// This is useful to create a context for an operator by wrapping it.
-	// Params given here are the ones returned by PerGadgetParams()
-	Instantiate(runner Runner, gadgetInstance any, perGadgetParams *params.Params) (OperatorInstance, error)
+	Instantiate(runner Runner, gadgetInstance any) (OperatorInstance, error)
 }
 
 type OperatorInstance interface {
@@ -182,9 +181,9 @@ func (e Operators) PerGadgetParamCollection() params.Collection {
 
 // PreGadgetRun calls PreGadgetRun on all members of the operator collection and replaces them with the returned
 // instance
-func (e Operators) PreGadgetRun(runner Runner, trace any, perGadgetParamCollection params.Collection) error {
+func (e Operators) PreGadgetRun(runner Runner, trace any) error {
 	for i, operator := range e {
-		operatorInstance, err := operator.Instantiate(runner, trace, perGadgetParamCollection[operator.Name()])
+		operatorInstance, err := operator.Instantiate(runner, trace)
 		if err != nil {
 			return fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
 		}

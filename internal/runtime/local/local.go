@@ -29,7 +29,7 @@ type localRuntime struct {
 	params *params.Params
 }
 
-func (lr *localRuntime) Init(runtimeParams *params.Params) error {
+func (lr *localRuntime) Init() error {
 	return nil
 }
 
@@ -37,7 +37,7 @@ func (lr *localRuntime) DeInit() error {
 	return nil
 }
 
-func (lr *localRuntime) RunGadget(runner runtime.Runner, runtimeParams *params.Params) error {
+func (lr *localRuntime) RunGadget(runner runtime.Runner) error {
 	logger := runner.Logger()
 
 	logger.Debugf("running with local runtime")
@@ -47,8 +47,8 @@ func (lr *localRuntime) RunGadget(runner runtime.Runner, runtimeParams *params.P
 		return errors.New("gadget not instantiable")
 	}
 
-	if runtimeParams != nil {
-		logger.Debugf("> Params: %+v", runtimeParams.ParamMap())
+	if lr.params != nil {
+		logger.Debugf("> Params: %+v", lr.params.ParamMap())
 	} else {
 		logger.Debugf("> Params: nil")
 	}

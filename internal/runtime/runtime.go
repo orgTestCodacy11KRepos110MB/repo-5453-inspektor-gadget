@@ -40,8 +40,8 @@ type Runner interface {
 // Runtime is the interface for gadget runtimes like kubectl-gadget, local-gadget
 // or gadgettracermgr
 type Runtime interface {
-	Init(*params.Params) error
+	Init() error
 	DeInit() error
 	Params() *params.Params
-	RunGadget(runner Runner, runtimeParams *params.Params) error
+	RunGadget(runner Runner) error
 }

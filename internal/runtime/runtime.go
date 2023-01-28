@@ -42,6 +42,6 @@ type Runner interface {
 type Runtime interface {
 	Init(*params.Params) error
 	DeInit() error
-	Params() params.ParamDescs
+	Params() *params.Params
 	RunGadget(runner Runner, runtimeParams *params.Params) error
 }

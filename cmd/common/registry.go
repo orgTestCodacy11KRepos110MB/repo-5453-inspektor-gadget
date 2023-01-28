@@ -42,7 +42,7 @@ import (
 // AddCommandsFromRegistry adds all gadgets known by the registry as cobra commands as a subcommand to their categories
 func AddCommandsFromRegistry(rootCmd *cobra.Command, runtime runtime.Runtime, columnFilters []cols.ColumnFilter) {
 	// Add runtime flags
-	runtimeParams := runtime.Params().ToParams()
+	runtimeParams := runtime.Params()
 	addFlags(rootCmd, runtimeParams)
 
 	// Add operator global flags
@@ -330,6 +330,10 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 }
 
 func addFlags(cmd *cobra.Command, params *params.Params) {
+	if params == nil {
+		return
+	}
+
 	for _, p := range *params {
 		desc := p.Description
 

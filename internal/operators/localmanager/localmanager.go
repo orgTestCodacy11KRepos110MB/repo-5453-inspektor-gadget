@@ -111,9 +111,9 @@ func (l *LocalManager) CanOperateOn(gadget gadgets.Gadget) bool {
 	return (isMountNsMapSetter && canEnrichEvent) || isAttacher || isContainersMapSetter
 }
 
-func (l *LocalManager) Init(operatorParams *params.Params) error {
+func (l *LocalManager) Init() error {
 	rc := make([]*containerutils.RuntimeConfig, 0)
-	parts := operatorParams.Get(Runtimes).AsStringSlice()
+	parts := l.params.Get(Runtimes).AsStringSlice()
 
 partsLoop:
 	for _, p := range parts {

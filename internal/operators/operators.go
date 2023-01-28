@@ -62,7 +62,7 @@ type Operator interface {
 	CanOperateOn(gadgets.Gadget) bool
 
 	// Init allows the operator to initialize itself
-	Init(params *params.Params) error
+	Init() error
 
 	// Close allows the operator to clean up stuff prior to exiting
 	Close() error
@@ -117,9 +117,9 @@ type operatorWrapper struct {
 	initialized bool
 }
 
-func (e *operatorWrapper) Init(params *params.Params) (err error) {
+func (e *operatorWrapper) Init() (err error) {
 	e.initOnce.Do(func() {
-		err = e.Operator.Init(params)
+		err = e.Operator.Init()
 		e.initialized = true
 	})
 	return err
@@ -161,9 +161,9 @@ func GetOperatorsForGadget(gadget gadgets.Gadget) Operators {
 }
 
 // Init initializes all registered allOperators using their respective params
-func (e Operators) Init(pc params.Collection) error {
+func (e Operators) Init() error {
 	for _, operator := range e {
-		err := operator.Init(pc[operator.Name()])
+		err := operator.Init()
 		if err != nil {
 			return fmt.Errorf("initializing operator %q: %w", operator.Name(), err)
 		}

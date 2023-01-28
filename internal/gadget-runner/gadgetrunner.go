@@ -107,13 +107,12 @@ func (r *GadgetRunner) GadgetParams() *params.Params {
 // RunGadget is the main function of GadgetRunner and controls the lifecycle of the gadget
 func (r *GadgetRunner) RunGadget(
 	runtimeParams *params.Params,
-	operatorParamCollection params.Collection,
 	operatorPerGadgetParamCollection params.Collection,
 	gadgetParams *params.Params,
 ) error {
 	r.gadgetParams = gadgetParams
 	r.operators = operators.GetOperatorsForGadget(r.gadget)
-	err := r.operators.Init(operatorParamCollection)
+	err := r.operators.Init()
 	if err != nil {
 		return fmt.Errorf("initializing operators: %w", err)
 	}

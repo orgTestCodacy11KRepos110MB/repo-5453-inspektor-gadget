@@ -41,21 +41,20 @@ import (
 
 // AddCommandsFromRegistry adds all gadgets known by the registry as cobra commands as a subcommand to their categories
 func AddCommandsFromRegistry(rootCmd *cobra.Command, runtime runtime.Runtime, columnFilters []cols.ColumnFilter) {
-	runtimeParams := runtime.Params().ToParams()
-
-	// Build lookup
-	lookup := make(map[string]*cobra.Command)
-	for _, cmd := range rootCmd.Commands() {
-		lookup[cmd.Name()] = cmd
-	}
-
 	// Add runtime flags
+	runtimeParams := runtime.Params().ToParams()
 	addFlags(rootCmd, runtimeParams)
 
 	// Add operator global flags
 	operatorsParamsCollection := operators.ParamsCollection()
 	for _, operatorParams := range operatorsParamsCollection {
 		addFlags(rootCmd, operatorParams)
+	}
+
+	// Build lookup
+	lookup := make(map[string]*cobra.Command)
+	for _, cmd := range rootCmd.Commands() {
+		lookup[cmd.Name()] = cmd
 	}
 
 	// Add all known gadgets to cobra in their respective categories
@@ -75,7 +74,7 @@ func AddCommandsFromRegistry(rootCmd *cobra.Command, runtime runtime.Runtime, co
 			rootCmd.AddCommand(cmd)
 			lookup[gadget.Category()] = cmd
 		}
-		cmd.AddCommand(buildCommandFromGadget(gadget, columnFilters, runtime, runtimeParams, operatorsParamsCollection))
+		cmd.AddCommand(buildCommandFromGadget(gadget, columnFilters, runtime, runtimeParams))
 	}
 }
 
@@ -116,7 +115,6 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 	columnFilters []cols.ColumnFilter,
 	runtime runtime.Runtime,
 	runtimeParams *params.Params,
-	operatorsParamsCollection params.Collection,
 ) *cobra.Command {
 	var outputMode string
 	var verbose bool
@@ -254,7 +252,7 @@ func buildCommandFromGadget(gadget gadgets.Gadget,
 			}
 
 			// Finally, hand over to runtime
-			return runner.RunGadget(runtimeParams, operatorsParamsCollection, operatorsPerGadgetParamCollection, gadgetParams)
+			return runner.RunGadget(runtimeParams, operatorsPerGadgetParamCollection, gadgetParams)
 		},
 	}
 

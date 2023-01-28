@@ -55,6 +55,12 @@ type Attacher interface {
 type LocalManager struct {
 	localGadgetManager *localgadgetmanager.LocalGadgetManager
 	rc                 []*containerutils.RuntimeConfig
+
+	// Global params
+	params *params.Params
+
+	// Per-gadget params
+	gadgetParams *params.Params
 }
 
 func (l *LocalManager) Name() string {
@@ -69,29 +75,12 @@ func (l *LocalManager) Dependencies() []string {
 	return nil
 }
 
-func (l *LocalManager) Params() params.ParamDescs {
-	return params.ParamDescs{
-		{
-			Key:          Runtimes,
-			Alias:        "r",
-			DefaultValue: strings.Join(containerutils.AvailableRuntimes, ","),
-			Description: fmt.Sprintf("Container runtimes to be used separated by comma. Supported values are: %s",
-				strings.Join(containerutils.AvailableRuntimes, ", ")),
-			IsMandatory: true,
-			// PossibleValues: containerutils.AvailableRuntimes, // TODO
-		},
-	}
+func (l *LocalManager) Params() *params.Params {
+	return l.params
 }
 
-func (l *LocalManager) PerGadgetParams() params.ParamDescs {
-	return params.ParamDescs{
-		{
-			Key:         ContainerName,
-			Alias:       "c",
-			Description: "Show only data from containers with that name",
-			IsMandatory: false,
-		},
-	}
+func (l *LocalManager) PerGadgetParams() *params.Params {
+	return l.gadgetParams
 }
 
 func (l *LocalManager) CanOperateOn(gadget gadgets.Gadget) bool {
@@ -352,5 +341,29 @@ func (l *LocalManager) Enricher(operators.EnricherFunc) operators.EnricherFunc {
 }
 
 func init() {
-	operators.Register(&LocalManager{})
+	operators.Register(&LocalManager{
+		params: &params.Params{
+			{
+				ParamDesc: &params.ParamDesc{
+					Key:          Runtimes,
+					Alias:        "r",
+					DefaultValue: strings.Join(containerutils.AvailableRuntimes, ","),
+					Description: fmt.Sprintf("Container runtimes to be used separated by comma. Supported values are: %s",
+						strings.Join(containerutils.AvailableRuntimes, ", ")),
+					IsMandatory: true,
+					// PossibleValues: containerutils.AvailableRuntimes, // TODO
+				},
+			},
+		},
+		gadgetParams: &params.Params{
+			{
+				ParamDesc: &params.ParamDesc{
+					Key:         ContainerName,
+					Alias:       "c",
+					Description: "Show only data from containers with that name",
+					IsMandatory: false,
+				},
+			},
+		},
+	})
 }

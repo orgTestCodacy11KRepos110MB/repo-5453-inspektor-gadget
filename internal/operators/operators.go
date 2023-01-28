@@ -49,10 +49,10 @@ type Operator interface {
 	Description() string
 
 	// Params will return global params (required) for this operator
-	Params() params.ParamDescs
+	Params() *params.Params
 
 	// PerGadgetParams will return params (required) per gadget instance of the operator
-	PerGadgetParams() params.ParamDescs
+	PerGadgetParams() *params.Params
 
 	// Dependencies can list other allOperators that this operator depends on
 	Dependencies() []string
@@ -137,7 +137,7 @@ func Register(operator Operator) {
 func ParamsCollection() params.Collection {
 	pc := make(params.Collection)
 	for _, operator := range allOperators {
-		pc[operator.Name()] = operator.Params().ToParams()
+		pc[operator.Name()] = operator.Params()
 	}
 	return pc
 }
@@ -175,7 +175,7 @@ func (e Operators) Init(pc params.Collection) error {
 func (e Operators) PerGadgetParamCollection() params.Collection {
 	pc := make(params.Collection)
 	for _, operator := range e {
-		pc[operator.Name()] = operator.PerGadgetParams().ToParams()
+		pc[operator.Name()] = operator.PerGadgetParams()
 	}
 	return pc
 }

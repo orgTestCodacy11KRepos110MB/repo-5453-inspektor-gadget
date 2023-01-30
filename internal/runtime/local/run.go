@@ -45,11 +45,12 @@ func (lr *localRuntime) runGadget(runner runtime.Runner, gadget gadgets.GadgetIn
 	}()
 
 	// Install operators
-	err = runner.Operators().PreGadgetRun(runner, gadgetInstance)
+	operatorInstances, err := runner.Operators().Instantiate(runner, gadgetInstance)
 	if err != nil {
 		return fmt.Errorf("starting operators: %w", err)
 	}
-	defer runner.Operators().PostGadgetRun()
+	defer operatorInstances.Close()
+
 	log.Debugf("found %d operators", len(runner.Operators()))
 
 	if gadget.Type() == gadgets.TypeTraceIntervals {
@@ -63,7 +64,7 @@ func (lr *localRuntime) runGadget(runner runtime.Runner, gadget gadgets.GadgetIn
 		log.Debugf("set event handler")
 		switch gadget.Type() {
 		default:
-			setter.SetEventHandler(runner.Parser().EventHandlerFunc(runner.Operators().Enrich))
+			setter.SetEventHandler(runner.Parser().EventHandlerFunc(operatorInstances.Enrich))
 			// setter.SetEventHandler(runner.Parser().EventHandlerFuncNew(runner.Operators().Enricher))
 		}
 	}
@@ -73,10 +74,10 @@ func (lr *localRuntime) runGadget(runner runtime.Runner, gadget gadgets.GadgetIn
 		log.Debugf("set event handler for arrays")
 		switch gadget.Type() {
 		default:
-			setter.SetEventHandlerArray(runner.Parser().EventHandlerFuncArray(runner.Operators().Enrich))
+			setter.SetEventHandlerArray(runner.Parser().EventHandlerFuncArray(operatorInstances.Enrich))
 			// setter.SetEventHandlerArray(runner.Parser().EventHandlerFuncArrayNew(runner.Operators().Enricher))
 		case gadgets.TypeTraceIntervals:
-			setter.SetEventHandlerArray(runner.Parser().EventHandlerFuncSnapshot("main", runner.Operators().Enrich)) // TODO: "main" is the node
+			setter.SetEventHandlerArray(runner.Parser().EventHandlerFuncSnapshot("main", operatorInstances.Enrich)) // TODO: "main" is the node
 			// setter.SetEventHandlerArray(runner.Parser().EventHandlerFuncSnapshotNew("main", runner.Operators().Enricher)) // TODO: "main" is the node
 		}
 	}
@@ -84,7 +85,7 @@ func (lr *localRuntime) runGadget(runner runtime.Runner, gadget gadgets.GadgetIn
 	// Set event handler (currently only used by profile/cpu)
 	if setter, ok := gadgetInstance.(gadgets.EventEnricherSetter); ok {
 		log.Debugf("set event enricher")
-		setter.SetEventEnricher(runner.Operators().Enrich)
+		setter.SetEventEnricher(operatorInstances.Enrich)
 		// setter.SetEventEnricher(runner.Operators().Enricher(func(a any) error {
 		// 	return nil
 		// }))

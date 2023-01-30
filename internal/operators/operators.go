@@ -69,18 +69,20 @@ type Operator interface {
 	// Close allows the operator to clean up stuff prior to exiting
 	Close() error
 
-	// Instantiate is called before a gadget is run (before PreGadgetRun) with this operator
-	// This must return something that implements operator as well.
+	// Instantiate is called before a gadget is run with this operator.
+	// This must return something that implements OperatorInstance as well.
 	// This is useful to create a context for an operator by wrapping it.
 	Instantiate(runner Runner, gadgetInstance any) (OperatorInstance, error)
 }
 
 type OperatorInstance interface {
-	// PreGadgetRun is called before a gadget is started but after all allOperators have been initialized
+	// Name returns the name of the operator instance
+	Name() string
+
+	// PreGadgetRun in intended to be called before a gadget is run
 	PreGadgetRun() error
 
-	// PostGadgetRun is called on the operator that was returned from PrepareTrace after a
-	// gadget was stopped
+	// PostGadgetRun is intended to be called after a gadget is run
 	PostGadgetRun() error
 
 	// Enricher should return a function that is able to operator on the event ev and
@@ -91,12 +93,7 @@ type OperatorInstance interface {
 	EnrichEvent(ev any) error
 }
 
-type operatorInterfaces struct {
-	Operator
-	OperatorInstance
-}
-
-type Operators []operatorInterfaces
+type Operators []Operator
 
 // KubernetesFromMountNSID is a typical kubernetes operator interface that adds node, pod, namespace and container
 // information given the MountNSID
@@ -149,9 +146,7 @@ func GetOperatorsForGadget(gadget gadgets.Gadget) Operators {
 	out := make(Operators, 0)
 	for _, operator := range allOperators {
 		if operator.CanOperateOn(gadget) {
-			out = append(out, operatorInterfaces{
-				Operator: operator,
-			})
+			out = append(out, operator)
 		}
 	}
 	out, err := SortOperators(out)
@@ -181,47 +176,53 @@ func (e Operators) NewGadgetParamsCollection(id string) params.Collection {
 	return pc
 }
 
-// PreGadgetRun calls PreGadgetRun on all members of the operator collection and replaces them with the returned
-// instance
-func (e Operators) PreGadgetRun(runner Runner, trace any) error {
-	for i, operator := range e {
-		operatorInstance, err := operator.Instantiate(runner, trace)
-		if err != nil {
-			return fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
-		}
-		e[i].OperatorInstance = operatorInstance
-	}
+type OperatorInstances []OperatorInstance
+
+// Instantiate calls Instantiate on all operators and returns a collection of the results.
+// It also calls PreGadgetRun on all instances.
+func (e Operators) Instantiate(runner Runner, trace any) (operatorInstances OperatorInstances, _ error) {
+	operatorInstances = make([]OperatorInstance, 0, len(e))
+
 	for _, operator := range e {
-		err := operator.PreGadgetRun()
+		oi, err := operator.Instantiate(runner, trace)
 		if err != nil {
-			return fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
+			return nil, fmt.Errorf("start trace on operator %q: %w", operator.Name(), err)
+		}
+		operatorInstances = append(operatorInstances, oi)
+	}
+
+	for _, instance := range operatorInstances {
+		if err := instance.PreGadgetRun(); err != nil {
+			operatorInstances.Close()
+			return nil, fmt.Errorf("pre gadget run on operator %q: %w", instance.Name(), err)
 		}
 	}
-	return nil
+
+	return operatorInstances, nil
 }
 
-func (e Operators) PostGadgetRun() error {
+func (oi OperatorInstances) Close() error {
 	// TODO: Handling errors?
-	for _, operator := range e {
-		operator.PostGadgetRun()
+	for _, instance := range oi {
+		instance.PostGadgetRun()
 	}
 	return nil
 }
 
 // Deprecated: Enrich an event using all members of the operator collection
-func (e Operators) Enrich(ev any) error {
+func (oi OperatorInstances) Enrich(ev any) error {
 	var err error
-	for _, operator := range e {
-		if err = operator.EnrichEvent(ev); err != nil {
-			return fmt.Errorf("operator %q failed to enrich event %+v", operator.Name(), ev)
+	for _, instance := range oi {
+		if err = instance.EnrichEvent(ev); err != nil {
+			return fmt.Errorf("operator %q failed to enrich event %+v", instance.Name(), ev)
 		}
 	}
 	return nil
 }
 
-func (e Operators) Enricher(fn func(any) error) func(any) error {
-	for i := len(e) - 1; i >= 0; i-- {
-		nfn := e[i].Enricher(fn)
+func (oi OperatorInstances) Enricher(fn func(any) error) func(any) error {
+	for i := len(oi) - 1; i >= 0; i-- {
+		nfn := oi[i].Enricher(fn)
 		if nfn != nil {
 			fn = nfn
 		}

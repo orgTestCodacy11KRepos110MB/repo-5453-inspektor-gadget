@@ -34,9 +34,10 @@ import (
 )
 
 const (
-	OperatorName  = "LocalManager"
-	Runtimes      = "runtimes"
-	ContainerName = "containername"
+	OperatorName         = "LocalManager"
+	OperatorInstanceName = "LocalManagerTrace"
+	Runtimes             = "runtimes"
+	ContainerName        = "containername"
 )
 
 type MountNsMapSetter interface {
@@ -184,6 +185,10 @@ func (l *localManager) Instantiate(runner operators.Runner, tracer any) (operato
 	return traceInstance, nil
 }
 
+func (l *localManagerTrace) Name() string {
+	return OperatorInstanceName
+}
+
 func (l *localManagerTrace) PreGadgetRun() error {
 	log := l.runner.Logger()
 
@@ -264,8 +269,6 @@ func (l *localManagerTrace) PreGadgetRun() error {
 }
 
 func (l *localManagerTrace) PostGadgetRun() error {
-	l.localManager.PostGadgetRun()
-
 	if l.mountnsmap != nil {
 		log.Debugf("calling RemoveMountNsMap()")
 		l.localGadgetManager.RemoveMountNsMap()
@@ -316,22 +319,6 @@ func (l *localManagerTrace) Enricher(next operators.EnricherFunc) operators.Enri
 		}
 		return next(ev)
 	}
-}
-
-func (l *localManager) PreGadgetRun() error {
-	return nil
-}
-
-func (l *localManager) PostGadgetRun() error {
-	return nil
-}
-
-func (l *localManager) EnrichEvent(a any) error {
-	return nil
-}
-
-func (l *localManager) Enricher(operators.EnricherFunc) operators.EnricherFunc {
-	return nil
 }
 
 func NewLocalManager() *localManager {
